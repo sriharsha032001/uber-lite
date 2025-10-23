@@ -26,7 +26,7 @@ public class Vehicle {
     private Long id;
 
     @Column(nullable = false, unique = true)
-    private int plate;
+    private String plate;
 
     @Column(nullable = false)
     private int capacity;
