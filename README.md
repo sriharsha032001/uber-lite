@@ -37,7 +37,7 @@ user management, driver onboarding, ride matching, and trip tracking.
 
 ### Clone & Run
 ```bash
-git clone https://github.com/<your-username>/uber-lite.git
+git clone https://github.com/sriharsha032001/uber-lite.git
 cd uber-lite
 mvn clean install
 mvn spring-boot:run
