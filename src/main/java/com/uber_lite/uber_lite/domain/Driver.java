@@ -13,6 +13,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.MapsId;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -36,6 +37,9 @@ public class Driver {
      
     @Column(nullable = false)
     private String licenseNumber;
+
+    @Version    
+    private Integer version;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

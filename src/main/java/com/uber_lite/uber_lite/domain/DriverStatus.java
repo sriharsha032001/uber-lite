@@ -4,5 +4,6 @@ public enum DriverStatus {
         AVAILABLE,
         ON_TRIP,
         IDLE,
-        OFFLINE
-    }   
+        OFFLINE,
+        ASSIGNED
+    }
