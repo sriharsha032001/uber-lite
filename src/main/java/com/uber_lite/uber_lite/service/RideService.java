@@ -1,11 +1,14 @@
 package com.uber_lite.uber_lite.service;
 
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.Optional;
 
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
 import com.uber_lite.uber_lite.core.matching.DriverMatchingStrategy;
+import com.uber_lite.uber_lite.core.matching.pricing.PricingStrategy;
 import com.uber_lite.uber_lite.domain.Driver;
 import com.uber_lite.uber_lite.domain.DriverStatus;
 import com.uber_lite.uber_lite.domain.Ride;
@@ -27,6 +30,7 @@ public class RideService {
     private final DriverMatchingStrategy driverMatchingStrategy;
     private final UserRepository userRepository;
     private final DriverRepository driverRepository;
+    private final PricingStrategy pricingStrategy;
 
     @Transactional
         public Ride requestRide(Long riderId, double pickupLat, double pickupLon, double dropLat, double dropLon, String vehicleType) {
@@ -102,6 +106,46 @@ public class RideService {
         driverRepository.save(candidate);
 
         return true;
+
+}
+      @Transactional
+      public void startRide(Long rideId, Long driverId) {
+        Ride ride = rideRepository.findById(rideId).orElseThrow();
+        if(ride.getDriver() == null || !ride.getDriver().getId().equals(driverId)) {
+            throw new IllegalArgumentException("Driver not assigned to this ride");
+        }
+        if (ride.getStatus() != RideStatus.DRIVER_ASSIGNED) {
+        throw new IllegalStateException("Ride is not in DRIVER_ASSIGNED state");
+    }
+
+        ride.setStatus(RideStatus.STARTED);
+        ride.setStartedAt(OffsetDateTime.now());
+        rideRepository.save(ride);
+
+      }
+
+      @Transactional
+        public BigDecimal completeRide(Long rideId, Long driverId) {
+                Ride ride = rideRepository.findById(rideId).orElseThrow();
+
+                if (ride.getDriver() == null || !ride.getDriver().getId().equals(driverId)) {
+             throw new IllegalStateException("Driver not assigned to this ride");
+    }
+
+    if (ride.getStatus() != RideStatus.STARTED) {
+        throw new IllegalStateException("Ride is not STARTED");
+    }
+
+    BigDecimal fare = pricingStrategy.price(ride);
+
+    ride.setFareAmount(fare.doubleValue());
+    ride.setCurrency("INR");
+    ride.setStatus(RideStatus.COMPLETED);
+    ride.setEndedAt(OffsetDateTime.now());
+    rideRepository.save(ride);
+
+    return fare;
+
 
 }
 }

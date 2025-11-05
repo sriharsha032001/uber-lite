@@ -1,5 +1,9 @@
 package com.uber_lite.uber_lite.web;
 
+import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.Map;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -28,5 +32,25 @@ public class RideController {
        Ride r = rideService.requestRide(rideId, pickupLat, pickupLon, dropLat, dropLon, VehicleType);
        return ResponseEntity.ok(r);                                         
     
+}
+
+    @PostMapping("/{rideId}/start")
+    public ResponseEntity<?> startRide(@RequestParam Long rideId , @RequestParam Long driverId) {
+        rideService.startRide(rideId, driverId);
+    return ResponseEntity.ok().build();
+}
+
+    @PostMapping("/{rideId}/complete")
+    public ResponseEntity<Map<String, Object>> completeRide(@RequestParam Long rideId , @RequestParam Long driverId) {
+         BigDecimal fare = rideService.completeRide(rideId, driverId);
+
+    // 2) build a response map
+    Map<String, Object> resp = new HashMap<>();
+    resp.put("rideId", rideId);
+    resp.put("fare", fare);          // BigDecimal is fine here
+    resp.put("currency", "INR");
+
+    // 3) return
+    return ResponseEntity.ok(resp);
 }
 }
