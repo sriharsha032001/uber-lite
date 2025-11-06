@@ -10,6 +10,12 @@ import org.springframework.stereotype.Service;
 import com.uber_lite.uber_lite.core.matching.DriverMatchingStrategy;
 import com.uber_lite.uber_lite.core.matching.pricing.PricingStrategy;
 import com.uber_lite.uber_lite.core.matching.pricing.ride.state.RideStateFactory;
+import com.uber_lite.uber_lite.core.matching.pricing.ride.state.events.EventBus;
+import com.uber_lite.uber_lite.core.matching.pricing.ride.state.events.models.DriverAssignedEvent;
+import com.uber_lite.uber_lite.core.matching.pricing.ride.state.events.models.DriverFreedEvent;
+import com.uber_lite.uber_lite.core.matching.pricing.ride.state.events.models.RideCancelledEvent;
+import com.uber_lite.uber_lite.core.matching.pricing.ride.state.events.models.RideCompletedEvent;
+import com.uber_lite.uber_lite.core.matching.pricing.ride.state.events.models.RideStartedEvent;
 import com.uber_lite.uber_lite.domain.Driver;
 import com.uber_lite.uber_lite.domain.DriverStatus;
 import com.uber_lite.uber_lite.domain.Ride;
@@ -33,6 +39,7 @@ public class RideService {
     private final DriverRepository driverRepository;
     private final PricingStrategy pricingStrategy;
     private final RideStateFactory stateFactory;
+    private final EventBus eventBus;
 
     @Transactional
         public Ride requestRide(Long riderId, double pickupLat, double pickupLon, double dropLat, double dropLon, String vehicleType) {
@@ -109,6 +116,12 @@ public class RideService {
          rideRepository.save(rider);
         driverRepository.save(candidate);
 
+        eventBus.publish(new DriverAssignedEvent(
+        rider.getId(),
+        candidate.getUser().getId(),
+        java.time.OffsetDateTime.now()
+    ));
+
         return true;
 
 }
@@ -121,6 +134,12 @@ public class RideService {
 
         ride.setStartedAt(OffsetDateTime.now());
         rideRepository.save(ride);
+
+        eventBus.publish(new RideStartedEvent(
+        ride.getId(),
+        ride.getDriver().getId(),
+        java.time.OffsetDateTime.now()
+    ));
 
       }
 
@@ -140,6 +159,14 @@ public class RideService {
 
     freeDriverAfterRide(ride); // free driver after ride completion
 
+    eventBus.publish(new RideCompletedEvent(
+        ride.getId(),
+        ride.getDriver().getId(),
+        fare,
+        ride.getCurrency(),
+        java.time.OffsetDateTime.now()
+    ));
+
     return fare;
 
 
@@ -152,6 +179,12 @@ public class RideService {
          rideRepository.save(ride);
 
          freeDriverAfterRide(ride);
+
+         eventBus.publish(new RideCancelledEvent(
+        ride.getId(),
+        actorUserId,
+        java.time.OffsetDateTime.now()
+));
 }
         public void freeDriverAfterRide(Ride ride){
             if(ride.getStatus() == RideStatus.COMPLETED || ride.getStatus() == RideStatus.CANCELED || ride.getDriver() != null){
@@ -161,10 +194,20 @@ public class RideService {
                         d.setStatus(DriverStatus.IDLE);
                         driverRepository.save(d);
 
+                        eventBus.publish(new DriverFreedEvent(
+                        ride.getId(),
+                         d.getUser().getId(),
+                      java.time.OffsetDateTime.now()
+            ));
+
                     }
                 );
 
+                
+
                 }
+
+                
 
             }
         }
