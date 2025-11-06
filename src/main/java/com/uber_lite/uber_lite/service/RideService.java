@@ -138,8 +138,33 @@ public class RideService {
 
     rideRepository.save(ride);
 
+    freeDriverAfterRide(ride); // free driver after ride completion
+
     return fare;
 
 
 }
+        @Transactional
+        public void cancelRide(Long rideId, Long actorUserId) {
+         var ride = rideRepository.findById(rideId).orElseThrow();
+         var state = stateFactory.from(ride.getStatus());
+         state.cancel(ride, actorUserId);
+         rideRepository.save(ride);
+
+         freeDriverAfterRide(ride);
 }
+        public void freeDriverAfterRide(Ride ride){
+            if(ride.getStatus() == RideStatus.COMPLETED || ride.getStatus() == RideStatus.CANCELED || ride.getDriver() != null){
+
+                driverRepository.findById(ride.getDriver().getId()).ifPresent(
+                    d -> {
+                        d.setStatus(DriverStatus.IDLE);
+                        driverRepository.save(d);
+
+                    }
+                );
+
+                }
+
+            }
+        }
