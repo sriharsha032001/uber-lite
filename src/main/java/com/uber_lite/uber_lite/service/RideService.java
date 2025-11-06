@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import com.uber_lite.uber_lite.core.matching.DriverMatchingStrategy;
 import com.uber_lite.uber_lite.core.matching.pricing.PricingStrategy;
+import com.uber_lite.uber_lite.core.matching.pricing.ride.state.RideStateFactory;
 import com.uber_lite.uber_lite.domain.Driver;
 import com.uber_lite.uber_lite.domain.DriverStatus;
 import com.uber_lite.uber_lite.domain.Ride;
@@ -31,6 +32,7 @@ public class RideService {
     private final UserRepository userRepository;
     private final DriverRepository driverRepository;
     private final PricingStrategy pricingStrategy;
+    private final RideStateFactory stateFactory;
 
     @Transactional
         public Ride requestRide(Long riderId, double pickupLat, double pickupLon, double dropLat, double dropLon, String vehicleType) {
@@ -48,12 +50,12 @@ public class RideService {
 
             ride = rideRepository.save(ride);
 
-            tryAssignDriverWithRetires(ride.getId(), pickupLat, pickupLon, vehicleType, 3);
+            tryAssignDriverWithRetries(ride.getId(), pickupLat, pickupLon, vehicleType, 3);
 
         return ride;
     }
 
-    public void tryAssignDriverWithRetires(Long rideId, double pLat, double pLon, String vehicleType, int retries){
+    public void tryAssignDriverWithRetries(Long rideId, double pLat, double pLon, String vehicleType, int retries){
 
         int attempts = 0;
 
@@ -98,8 +100,10 @@ public class RideService {
         }
         // Assign driver to ride
          // Perform atomic state changes
+         var state = stateFactory.from(rider.getStatus());
+         state.assign(rider , candidate.getUser());
         rider.setDriver(candidate.getUser());
-        rider.setStatus(RideStatus.DRIVER_ASSIGNED);
+
         candidate.setStatus(DriverStatus.ASSIGNED);
 
          rideRepository.save(rider);
@@ -111,14 +115,10 @@ public class RideService {
       @Transactional
       public void startRide(Long rideId, Long driverId) {
         Ride ride = rideRepository.findById(rideId).orElseThrow();
-        if(ride.getDriver() == null || !ride.getDriver().getId().equals(driverId)) {
-            throw new IllegalArgumentException("Driver not assigned to this ride");
-        }
-        if (ride.getStatus() != RideStatus.DRIVER_ASSIGNED) {
-        throw new IllegalStateException("Ride is not in DRIVER_ASSIGNED state");
-    }
+        
+        var state = stateFactory.from(ride.getStatus());
+        state.started(ride, driverId);
 
-        ride.setStatus(RideStatus.STARTED);
         ride.setStartedAt(OffsetDateTime.now());
         rideRepository.save(ride);
 
@@ -128,20 +128,14 @@ public class RideService {
         public BigDecimal completeRide(Long rideId, Long driverId) {
                 Ride ride = rideRepository.findById(rideId).orElseThrow();
 
-                if (ride.getDriver() == null || !ride.getDriver().getId().equals(driverId)) {
-             throw new IllegalStateException("Driver not assigned to this ride");
-    }
-
-    if (ride.getStatus() != RideStatus.STARTED) {
-        throw new IllegalStateException("Ride is not STARTED");
-    }
-
     BigDecimal fare = pricingStrategy.price(ride);
 
-    ride.setFareAmount(fare.doubleValue());
-    ride.setCurrency("INR");
-    ride.setStatus(RideStatus.COMPLETED);
-    ride.setEndedAt(OffsetDateTime.now());
+    var state = stateFactory.from(ride.getStatus());
+    state.completed(ride, driverId, fare);
+
+    if (ride.getCurrency() == null) ride.setCurrency("INR");
+    if (ride.getEndedAt() == null) ride.setEndedAt(OffsetDateTime.now());
+
     rideRepository.save(ride);
 
     return fare;
