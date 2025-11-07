@@ -3,8 +3,11 @@ package com.uber_lite.uber_lite.core.matching.pricing;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
+import org.springframework.stereotype.Service;
+
 import com.uber_lite.uber_lite.domain.Ride;
 
+@Service
 public class DistanceTimePricing implements PricingStrategy {
 
     @Override
@@ -36,6 +39,6 @@ public class DistanceTimePricing implements PricingStrategy {
 
     }
 
-    
+
 
 }

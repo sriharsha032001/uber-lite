@@ -1,5 +1,7 @@
 package com.uber_lite.uber_lite.core.matching.pricing.ride.state;
 
+import java.math.BigDecimal;
+
 import com.uber_lite.uber_lite.domain.Ride;
 import com.uber_lite.uber_lite.domain.User;
 
