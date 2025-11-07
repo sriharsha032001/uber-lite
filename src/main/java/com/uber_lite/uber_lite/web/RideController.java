@@ -1,56 +1,67 @@
 package com.uber_lite.uber_lite.web;
 
 import java.math.BigDecimal;
-import java.util.HashMap;
-import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.uber_lite.uber_lite.domain.Ride;
+import com.uber_lite.uber_lite.dto.ride.RideCancelDTO;
+import com.uber_lite.uber_lite.dto.ride.RideCompleteDTO;
+import com.uber_lite.uber_lite.dto.ride.RideRequestDTO;
+import com.uber_lite.uber_lite.dto.ride.RideResponseDTO;
+import com.uber_lite.uber_lite.dto.ride.RideStartDTO;
 import com.uber_lite.uber_lite.service.RideService;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+
+import static com.uber_lite.uber_lite.dto.ride.RideMapper.toDto;
+
 
 @RestController
 @RequestMapping("/api/rides")
 @RequiredArgsConstructor
 public class RideController {
 
-    private RideService rideService;
+    private final RideService rideService;
 
     @PostMapping
-    public ResponseEntity<Ride> request(@RequestParam Long rideId,
-                                        @RequestParam double pickupLat,
-                                        @RequestParam double pickupLon,
-                                        @RequestParam double dropLat,
-                                        @RequestParam double dropLon,
-                                        @RequestParam(required = false) String VehicleType) {
-       Ride r = rideService.requestRide(rideId, pickupLat, pickupLon, dropLat, dropLon, VehicleType);
-       return ResponseEntity.ok(r);                                         
+    public ResponseEntity<RideResponseDTO> request(@Valid @RequestBody RideRequestDTO req) {
+       Ride r = rideService.requestRide(req.riderId(),req.pickupLat(), req.pickupLon(), req.dropLat(), req.dropLon(), req.vehicleType());
+       return ResponseEntity.ok(toDto(r));                                         
     
 }
 
     @PostMapping("/{rideId}/start")
-    public ResponseEntity<?> startRide(@RequestParam Long rideId , @RequestParam Long driverId) {
-        rideService.startRide(rideId, driverId);
-    return ResponseEntity.ok().build();
+    public ResponseEntity<RideResponseDTO> startRide(@PathVariable Long rideId,
+                                                 @Valid @RequestBody RideStartDTO req) {
+        rideService.startRide(rideId, req.driverId());
+
+        Ride r = rideService.getById(rideId);
+        return ResponseEntity.ok(toDto(r));
 }
 
     @PostMapping("/{rideId}/complete")
-    public ResponseEntity<Map<String, Object>> completeRide(@RequestParam Long rideId , @RequestParam Long driverId) {
-         BigDecimal fare = rideService.completeRide(rideId, driverId);
+    public ResponseEntity<RideResponseDTO> completeRide(@PathVariable Long rideId,
+                                                    @Valid @RequestBody RideCompleteDTO req) {
+         BigDecimal fare = rideService.completeRide(rideId, req.driverId());
 
-    // 2) build a response map
-    Map<String, Object> resp = new HashMap<>();
-    resp.put("rideId", rideId);
-    resp.put("fare", fare);          // BigDecimal is fine here
-    resp.put("currency", "INR");
+        Ride r = rideService.getById(rideId);
 
-    // 3) return
-    return ResponseEntity.ok(resp);
-}
+        // 3) return
+        return ResponseEntity.ok(toDto(r));
+    }
+    @PostMapping("/{rideId}/cancel")
+    public ResponseEntity<RideResponseDTO> cancelRide(@PathVariable Long rideId , @Valid @RequestBody RideCancelDTO req) {
+        rideService.cancelRide(rideId, req.actorUserId());
+        Ride r = rideService.getById(rideId);
+        return ResponseEntity.ok(toDto(r));
+
+    }
+
 }

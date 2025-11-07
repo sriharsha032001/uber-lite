@@ -210,4 +210,7 @@ public class RideService {
                 
 
             }
+            public Ride getById(Long rideId) {
+                return rideRepository.findById(rideId).orElseThrow();
+            }
         }
