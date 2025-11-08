@@ -2,6 +2,7 @@ package com.uber_lite.uber_lite.core.matching.pricing.ride.state.events;
 
 import java.time.OffsetDateTime;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -22,8 +23,9 @@ import lombok.SneakyThrows;
 @RequiredArgsConstructor
 public class AuditLogger {
 
-    private EventBus eventBus;
-    private RideAuditEventRepository auditRepository;
+    @Autowired
+    private final EventBus eventBus;
+    private final RideAuditEventRepository auditRepository;
     private final ObjectMapper mapper = new ObjectMapper();
 
     @PostConstruct
