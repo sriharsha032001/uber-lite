@@ -6,16 +6,19 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.uber_lite.uber_lite.domain.Ride;
 import com.uber_lite.uber_lite.dto.ride.RideCancelDTO;
 import com.uber_lite.uber_lite.dto.ride.RideCompleteDTO;
+import com.uber_lite.uber_lite.dto.ride.RideMapper;
 import com.uber_lite.uber_lite.dto.ride.RideRequestDTO;
 import com.uber_lite.uber_lite.dto.ride.RideResponseDTO;
 import com.uber_lite.uber_lite.dto.ride.RideStartDTO;
 import com.uber_lite.uber_lite.service.RideService;
+import com.uber_lite.uber_lite.service.RideService.RideRequestInputs;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -63,5 +66,16 @@ public class RideController {
         return ResponseEntity.ok(toDto(r));
 
     }
+
+        @PostMapping
+        public ResponseEntity<RideResponseDTO> request(@Valid @RequestBody RideRequestDTO req,
+                                               @RequestHeader(value = "Idempotency-Key", required = false) String idemKey) {
+        RideRequestInputs inputs = new RideRequestInputs(
+            req.riderId(), req.pickupLat(), req.pickupLon(),
+            req.dropLat(), req.dropLon(), req.vehicleType()
+        );
+            Ride r = rideService.requestRideWithIdempotency(inputs, idemKey);
+            return ResponseEntity.ok(RideMapper.toDto(r));
+        }
 
 }

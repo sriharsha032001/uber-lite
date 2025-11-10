@@ -1,10 +1,12 @@
 package com.uber_lite.uber_lite.service;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import com.uber_lite.uber_lite.core.matching.DriverMatchingStrategy;
@@ -18,10 +20,12 @@ import com.uber_lite.uber_lite.core.matching.pricing.ride.state.events.models.Ri
 import com.uber_lite.uber_lite.core.matching.pricing.ride.state.events.models.RideStartedEvent;
 import com.uber_lite.uber_lite.domain.Driver;
 import com.uber_lite.uber_lite.domain.DriverStatus;
+import com.uber_lite.uber_lite.domain.IdempotencyKey;
 import com.uber_lite.uber_lite.domain.Ride;
 import com.uber_lite.uber_lite.domain.RideStatus;
 import com.uber_lite.uber_lite.domain.User;
 import com.uber_lite.uber_lite.repo.DriverRepository;
+import com.uber_lite.uber_lite.repo.IdempotencyKeyRepository;
 import com.uber_lite.uber_lite.repo.RideRepository;
 import com.uber_lite.uber_lite.repo.UserRepository;
 
@@ -40,6 +44,7 @@ public class RideService {
     private final PricingStrategy pricingStrategy;
     private final RideStateFactory stateFactory;
     private final EventBus eventBus;
+    private final IdempotencyKeyRepository idempotencyKeyRepository;
 
     @Transactional
         public Ride requestRide(Long riderId, double pickupLat, double pickupLon, double dropLat, double dropLon, String vehicleType) {
@@ -206,11 +211,74 @@ public class RideService {
                 
 
                 }
-
-                
-
             }
             public Ride getById(Long rideId) {
                 return rideRepository.findById(rideId).orElseThrow();
             }
+
+            public Ride requestRideWithIdempotency(RideRequestInputs inputs, String idemKey) {
+                if (idemKey == null || idemKey.isBlank()) {
+            // fallback to normal behavior
+            return requestRide(inputs.riderId(), inputs.pickupLat(), inputs.pickupLon(),
+                               inputs.dropLat(), inputs.dropLon(), inputs.vehicleType());
+            }
+            final String key = idemKey.trim();
+
+            try {
+            IdempotencyKey newKey = IdempotencyKey.builder()
+                    .key(key)
+                    .status("IN_PROGRESS")
+                    .createdAt(OffsetDateTime.now())
+                    .updatedAt(OffsetDateTime.now())
+                    .build();
+            // save should fail if key exists (PK)
+            idempotencyKeyRepository.save(newKey);
+            // we "won" the race — now create the ride and update the row
+            Ride ride = requestRide(inputs.riderId(), inputs.pickupLat(), inputs.pickupLon(),
+                    inputs.dropLat(), inputs.dropLon(), inputs.vehicleType());
+
+            // update idempotency record
+            newKey.setRideId(ride.getId());
+            newKey.setStatus("COMPLETED");
+            newKey.setUpdatedAt(OffsetDateTime.now());
+            idempotencyKeyRepository.save(newKey);
+
+            return ride;
+                }
+                catch (DataIntegrityViolationException ex) {
+            // someone else inserted that key before us -> fetch it
+            return resolveExistingIdempotency(key);
         }
+    }
+
+    private Ride resolveExistingIdempotency(String key) {
+        final Duration maxWait = Duration.ofSeconds(5);
+        final long pollIntervalMs = 100L;
+        final OffsetDateTime start = OffsetDateTime.now();
+        while (Duration.between(start, OffsetDateTime.now()).compareTo(maxWait) < 0) {
+            IdempotencyKey rec = idempotencyKeyRepository.findById(key).orElse(null);
+            if (rec == null) {
+                // Strange: not found — try again quickly
+                try { Thread.sleep(pollIntervalMs); } catch (InterruptedException ignored) {}
+                continue;
+            }
+            if (rec.getRideId() != null && "COMPLETED".equals(rec.getStatus())) {
+                // success: fetch and return ride
+                return rideRepository.findById(rec.getRideId()).orElseThrow();
+            }
+            // still in progress: wait a bit
+            try { Thread.sleep(pollIntervalMs); } catch (InterruptedException ignored) {}
+        }
+        // timed out waiting — defensive approach: fetch current record; if has rideId return it, else raise
+        IdempotencyKey rec = idempotencyKeyRepository.findById(key).orElse(null);
+        if (rec != null && rec.getRideId() != null) {
+            return rideRepository.findById(rec.getRideId()).orElseThrow();
+        }
+        // If still no ride id, we give up: throw an error or return a 202-like response.
+        throw new IllegalStateException("Idempotent request in progress. Try again later");
+    }
+
+    public static record RideRequestInputs(Long riderId, Double pickupLat, Double pickupLon,
+                                           Double dropLat, Double dropLon, String vehicleType) {}
+}
+
