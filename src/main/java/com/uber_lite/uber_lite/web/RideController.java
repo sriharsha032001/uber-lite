@@ -2,6 +2,7 @@ package com.uber_lite.uber_lite.web;
 
 import java.math.BigDecimal;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,6 +18,7 @@ import com.uber_lite.uber_lite.dto.ride.RideMapper;
 import com.uber_lite.uber_lite.dto.ride.RideRequestDTO;
 import com.uber_lite.uber_lite.dto.ride.RideResponseDTO;
 import com.uber_lite.uber_lite.dto.ride.RideStartDTO;
+import com.uber_lite.uber_lite.ratelimit.RateLimiterService;
 import com.uber_lite.uber_lite.service.RideService;
 import com.uber_lite.uber_lite.service.RideService.RideRequestInputs;
 
@@ -32,6 +34,8 @@ import static com.uber_lite.uber_lite.dto.ride.RideMapper.toDto;
 public class RideController {
 
     private final RideService rideService;
+    private final RateLimiterService rateLimiter;
+
 
     @PostMapping
     public ResponseEntity<RideResponseDTO> request(@Valid @RequestBody RideRequestDTO req) {
@@ -70,6 +74,13 @@ public class RideController {
         @PostMapping
         public ResponseEntity<RideResponseDTO> request(@Valid @RequestBody RideRequestDTO req,
                                                @RequestHeader(value = "Idempotency-Key", required = false) String idemKey) {
+
+            // rate limit check
+        if (!rateLimiter.allowRequest(req.riderId())) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(null); // or return a nice error DTO
+        }
+        
         RideRequestInputs inputs = new RideRequestInputs(
             req.riderId(), req.pickupLat(), req.pickupLon(),
             req.dropLat(), req.dropLon(), req.vehicleType()
