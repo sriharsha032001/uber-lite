@@ -8,30 +8,32 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
+import lombok.*;
 import lombok.NoArgsConstructor;
+import lombok.Builder;
+
 
 @Entity
-@Table(name = "users")
+@Table(name = "vehicles")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class User {
+public class Vehicle {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    @Column(nullable = false)
-    private String name;
 
     @Column(nullable = false, unique = true)
-    private String phoneNumber;
+    private String plate;
 
     @Column(nullable = false)
+    private int capacity;
+
     @Enumerated(EnumType.STRING)
-    private Role role;
+    @Column(nullable = false)
+    private Type type;
+
     
 }
